@@ -1,0 +1,107 @@
+import pandas as pd
+import numpy as np
+import time
+import joblib
+import smtplib
+import logging
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from sklearn.ensemble import IsolationForest
+
+# Configure Logging
+logging.basicConfig(filename="sql_monitor.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger()
+
+# Email Credentials
+SENDER_EMAIL = "ay8010650@gmail.com"
+SENDER_PASSWORD = "ovkk tjwe ojda hgxe"
+RECIPIENT_EMAIL = "ry8010650@gmail.com"
+
+# Function to Send Email Alert
+def send_email_alert(sql_text):
+    print(f"\n🚨 ALERT: SQL Injection Detected!\nSQL: {sql_text}")  # Debugging Output
+    logger.warning(f"🚨 SQL Injection Detected: {sql_text}")
+
+    subject = "🚨 ALERT: SQL Injection Detected!"
+    body = f"Suspicious SQL Query Detected:\n\n{sql_text}"
+
+    message = MIMEMultipart()
+    message["From"] = SENDER_EMAIL
+    message["To"] = RECIPIENT_EMAIL
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, message.as_string())
+        print("✅ Email Sent Successfully!")  # Debugging Output
+    except Exception as e:
+        print(f"❌ Error Sending Email: {e}")  # Debugging Output
+        logger.error(f"❌ Error Sending Email: {e}")
+
+# Train AI Model
+def train_model():
+    try:
+        df = pd.read_csv("logs.csv")
+
+        # Debugging Output
+        print(f"📊 Loaded {len(df)} log entries from logs.csv")
+
+        # Handle missing values
+        df["SQL_TEXT"].fillna("", inplace=True)
+
+        # Feature Selection: Using `ROWS_SENT` & `ROWS_EXAMINED` for anomaly detection
+        features = df[["ROWS_SENT", "ROWS_EXAMINED"]].values
+
+        model = IsolationForest(contamination=0.05, random_state=42)
+        model.fit(features)
+
+        joblib.dump(model, "sql_model.pkl")
+        print("✅ AI Model Trained & Saved Successfully!")  # Debugging Output
+    except Exception as e:
+        print(f"❌ Error Training Model: {e}")
+        logger.error(f"❌ Error Training Model: {e}")
+
+# Monitor SQL Logs
+def monitor_logs():
+    try:
+        model = joblib.load("sql_model.pkl")
+        df = pd.read_csv("logs.csv")
+
+        print("🚀 Monitoring SQL Logs...\n")
+
+        df["SQL_TEXT"].fillna("", inplace=True)
+
+        for index, row in df.iterrows():
+            sql_text = row["SQL_TEXT"]
+            features = np.array([[row["ROWS_SENT"], row["ROWS_EXAMINED"]]])  # Ensure correct format
+
+            prediction = model.predict(features)
+
+            if prediction[0] == -1:  # Anomalous query detected
+                send_email_alert(sql_text)
+            else:
+                print(f"✅ Safe Query: {sql_text}")  # Debugging Output
+
+            time.sleep(1)  # Simulating real-time monitoring
+
+            # Stop after checking 5 queries (for testing)
+            if index >= 4:
+                print("\n✅ Monitoring Stopped After 5 Queries (Test Mode)")
+                break
+
+    except Exception as e:
+        print(f"❌ Error in Monitoring: {e}")
+        logger.error(f"❌ Error in Monitoring: {e}")
+
+# Main Function
+def main():
+    print("🔍 Training AI Model...")
+    train_model()
+    print("\n🚀 Starting Real-Time SQL Injection Monitoring (Only 5 queries for testing)...")
+    monitor_logs()
+
+if __name__ == "__main__":
+    main()
