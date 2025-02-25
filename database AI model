@@ -1,0 +1,180 @@
+import mysql.connector
+import joblib
+import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import re
+import numpy as np
+import logging
+from fpdf import FPDF
+
+# Setup logging
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger()
+
+# Load AI Risk Model
+try:
+    model = joblib.load("risk_model.pkl")
+    logger.info("✅ AI Risk Model Loaded Successfully!")
+except FileNotFoundError:
+    logger.error("❌ Error: risk_model.pkl not found. Train and save the model first!")
+    exit()
+
+# Database Connection
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "YourStrongPassword",
+    "database": "retemex_db",
+    "charset": "utf8mb4",
+    "collation": "utf8mb4_general_ci"
+}
+
+try:
+    conn = mysql.connector.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    logger.info("✅ Database Connected Successfully!")
+except mysql.connector.Error as e:
+    logger.error(f"❌ Database Connection Error: {e}")
+    exit()
+
+# Read compare.csv
+try:
+    compare_data = pd.read_csv("compare.csv", names=["email", "password"], dtype=str)
+    compare_data.dropna(inplace=True)
+    compare_data = compare_data.applymap(str.strip)
+    compare_data.sort_values(by="email", inplace=True)
+    logger.info(f"✅ Loaded compare.csv with {len(compare_data)} entries.")
+except FileNotFoundError:
+    logger.error("❌ Error: compare.csv file not found!")
+    exit()
+
+# Fetch Data from Database
+try:
+    cursor.execute("SELECT email, password FROM RET_CLIENTES ORDER BY email")
+    db_data = {email.strip(): password.strip() for email, password in cursor.fetchall() if email and password}
+    logger.debug(f"✅ Retrieved {len(db_data)} records from the database.")
+except mysql.connector.Error as e:
+    logger.error(f"❌ Database Query Error: {e}")
+    exit()
+
+# Compare with Breached Data
+compromised_credentials = [(row["email"], row["password"]) for _, row in compare_data.iterrows() if row["email"] in db_data and db_data[row["email"]] == row["password"]]
+
+if not compromised_credentials:
+    logger.info("✅ No compromised credentials found! Exiting.")
+    cursor.close()
+    conn.close()
+    exit()
+
+logger.info(f"🚨 Found {len(compromised_credentials)} compromised accounts out of {len(db_data)} total.")
+
+# Feature Extraction Function
+def extract_features(email, password):
+    password_length = len(password)
+    special_chars = sum(not c.isalnum() for c in password)
+    email_domain = email.split('@')[-1]
+    is_free_email = int(email_domain in ["gmail.com", "yahoo.com", "outlook.com"])
+    common_password = int(bool(re.search(r"password|1234|qwerty", password, re.IGNORECASE)))
+    return [password_length, special_chars, is_free_email, common_password]
+
+# Prepare Features for Model
+features = np.array([extract_features(email, password) for email, password in compromised_credentials])
+features_df = pd.DataFrame(features, columns=["password_length", "special_chars", "is_free_email", "common_password"])
+
+# Predict Risk Scores
+try:
+    risk_scores = model.predict(features_df)
+    logger.debug(f"🔍 Raw Model Predictions: {risk_scores}")
+except Exception as e:
+    logger.error(f"❌ Error during prediction: {e}")
+    exit()
+
+# Compute Adjusted Risk Score
+matched_ratio = len(compromised_credentials) / len(db_data)
+adjusted_risk_score = np.mean(risk_scores) * matched_ratio * 100
+logger.info(f"🚨 Adjusted Risk Score: {adjusted_risk_score:.2f}%")
+
+# Generate PDF Report
+def generate_pdf_report(compromised_accounts, adjusted_risk_score):
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", style='B', size=16)
+    pdf.cell(200, 10, "DugDugInfo - Breach Report", ln=True, align='C')
+    pdf.ln(10)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, f"Adjusted Risk Score: {adjusted_risk_score:.2f}%", ln=True, align='C')
+    pdf.ln(10)
+    pdf.cell(200, 10, f"Total Compromised Accounts: {len(compromised_accounts)}", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", size=10)
+    for email, password, score in compromised_accounts:
+        pdf.cell(200, 10, f"{email} - Risk Score: {score}", ln=True)
+    
+    pdf_file = "breach_report.pdf"
+    pdf.output(pdf_file)
+    return pdf_file
+
+pdf_file = generate_pdf_report([(email, password, score) for (email, password), score in zip(compromised_credentials, risk_scores)], adjusted_risk_score)
+
+# Email Alert Function
+def send_email_alert(pdf_filename):
+    sender_email = "ay8010650@gmail.com"
+    sender_password = "ovkk tjwe ojda hgxe"
+    recipient_email = "ry8010650@gmail.com"
+    
+    subject = "🚨 ALERT: Breach Report Attached"
+    body = "Please find the attached breach report (DugDugInfo) with compromised account details."es, but IsolationForest was fitted with feature names
+  warnings.warn(
+Traceback (most recent call last):
+  File "/home/osint/Desktop/sql2.py", line 110, in <module>
+    main()
+  File "/home/osint/Desktop/sql2.py", line 107, in main
+    monitor_logs(model)
+  File "/home/osint/Desktop/sql2.py", line 92, in monitor_logs
+    prediction = model.predict(features)
+  File "/usr/local/lib/python3.9/dist-packages/sklearn/ensemble/_iforest.py", line 420, in predict
+    decision_func = self.decision_function(X)
+  File "/usr/local/lib/python3.9/dist-packages/sklearn/ensemble/_iforest.py", line 474, in decision_function
+    return self.score_samples(X) - self.offset_
+  File "/usr/local/lib/python3.9/dist-packages/sklearn/ensemble/_iforest.py", line 519, in score_samples
+    X = validate_data(
+  File "/usr/local/lib/python3.9/dist-packages/sklearn/utils/validation.py", line 2965, in validate_data
+    _check_n_features(_estimator, X, reset=reset)
+  File "/usr/local/lib/python3.9/dist-packages/sklearn/utils/validation.py", line 2829, in _check_n_features
+    raise ValueError(
+ValueError: X has 2 features, but IsolationForest is expecting 1 features as input.
+                                                                                    
+    
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = recipient_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+    
+    with open(pdf_filename, "rb") as attachment:
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(attachment.read())
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f"attachment; filename={pdf_filename}")
+        message.attach(part)
+    
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, recipient_email, message.as_string())
+        logger.info("✅ Email Sent Successfully with PDF Report")
+    except Exception as e:
+        logger.error(f"❌ Error Sending Email: {e}")
+
+send_email_alert(pdf_file)
+
+cursor.close()
+conn.close()
+logger.info("✅ Database Connection Closed Successfully.")
