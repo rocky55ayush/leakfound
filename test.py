@@ -6,7 +6,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-import numpy as np
 import logging
 from fpdf import FPDF
 import os
@@ -87,8 +86,8 @@ if not matched_entries:
 num_compromised_accounts = len(matched_entries)
 logger.info(f"🚨 Found {num_compromised_accounts} compromised accounts.")
 
-# ✅ Calculate Adjusted Risk Score Based on Percentage of Compromised Accounts
-adjusted_risk_score = (num_compromised_accounts / total_db_records) * 100
+# ✅ Calculate Adjusted Risk Score
+adjusted_risk_score = (num_compromised_accounts / total_db_records) * 100 if total_db_records > 0 else 0
 adjusted_risk_score = min(max(adjusted_risk_score, 0), 100)
 logger.info(f"🚨 Adjusted Risk Score: {adjusted_risk_score:.2f}%")
 
@@ -106,8 +105,8 @@ def generate_pdf_report(matched_entries, adjusted_risk_score):
     pdf.ln(10)
     pdf.set_font("Arial", size=10)
 
-    for i, (username, password, email, phone, card_number, expiry_date, cvv) in enumerate(matched_entries[:50]):
-        pdf.cell(200, 10, f"{i+1}. {email} - {phone} - Card: {card_number} - CVV: {cvv}", ln=True)
+    for i, (username, password, email, phone, card_number, expiry_date, cvv) in enumerate(matched_entries, start=1):
+        pdf.cell(200, 10, f"{i}. {email} - {phone} - Card: {card_number} - CVV: {cvv}", ln=True)
 
     pdf_file = "breach_report.pdf"
     pdf.output(pdf_file)
