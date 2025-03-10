@@ -48,25 +48,35 @@ if not os.path.exists(CSV_PATH):
     exit()
 
 compare_data = pd.read_csv(CSV_PATH, dtype=str).dropna()
-required_columns = ["Username", "Password", "email", "phone"]
+
+# ✅ Define Required Columns
+required_columns = ["Username", "Password", "email", "phone", "card_number", "expiry_date", "cvv"]
+
+# ✅ Check if Required Columns Exist
 if not all(col in compare_data.columns for col in required_columns):
-    logger.error("❌ CSV File Missing Required Columns!")
+    logger.error(f"❌ CSV File Missing Required Columns! Found columns: {list(compare_data.columns)}")
     exit()
 
+# ✅ Select Only Required Columns
 compare_data = compare_data[required_columns].map(str.strip)
 logger.info(f"✅ Loaded export_data.csv with {len(compare_data)} entries.")
 
 # ✅ Fetch Data from Database
 try:
-    cursor.execute("SELECT username, password, email, phone FROM RET_CLIENTES")
+    cursor.execute("SELECT username, password, email, phone, card_number, expiry_date, cvv FROM RET_CLIENTES")
     db_data = {tuple(map(str.strip, row)) for row in cursor.fetchall()}
-    logger.info(f"✅ Retrieved {len(db_data)} records from the database.")
+    total_db_records = len(db_data)
+    logger.info(f"✅ Retrieved {total_db_records} records from the database.")
 except mysql.connector.Error as e:
     logger.error(f"❌ Database Query Error: {e}")
     exit()
 
 # ✅ Compare CSV Data with Database
-matched_entries = [tuple(map(str.strip, row)) for row in compare_data.itertuples(index=False, name=None) if tuple(map(str.strip, row)) in db_data]
+matched_entries = [
+    tuple(map(str.strip, row))
+    for row in compare_data.itertuples(index=False, name=None)
+    if tuple(map(str.strip, row)) in db_data
+]
 
 if not matched_entries:
     logger.info("✅ No compromised accounts found! Exiting.")
@@ -74,36 +84,20 @@ if not matched_entries:
     conn.close()
     exit()
 
-logger.info(f"🚨 Found {len(matched_entries)} compromised accounts.")
+num_compromised_accounts = len(matched_entries)
+logger.info(f"🚨 Found {num_compromised_accounts} compromised accounts.")
 
-# ✅ Feature Extraction for AI Model
-def extract_features(username, email, password, phone):
-    return [len(password)]  # Simple password length feature
-
-features = np.array([extract_features(*account) for account in matched_entries])
-features_df = pd.DataFrame(features, columns=["password_length"])
-
-# ✅ Predict Risk Scores
-try:
-    risk_scores = model.predict(features_df)
-    mean_risk = np.mean(risk_scores) / 10  # Normalize risk score
-    matched_ratio = len(matched_entries) / max(len(db_data), 1)  # Prevent division by zero
-
-    # ✅ Adjusted Risk Score Calculation
-    adjusted_risk_score = (matched_ratio ** 0.9) * 100  
-    adjusted_risk_score = min(max(adjusted_risk_score, 0), 100)  # Keep in 0-100% range
-
-    logger.info(f"🚨 Adjusted Risk Score: {adjusted_risk_score:.2f}%")
-except Exception as e:
-    logger.error(f"❌ Error Predicting Risk Scores: {e}")
-    exit()
+# ✅ Calculate Adjusted Risk Score Based on Percentage of Compromised Accounts
+adjusted_risk_score = (num_compromised_accounts / total_db_records) * 100
+adjusted_risk_score = min(max(adjusted_risk_score, 0), 100)
+logger.info(f"🚨 Adjusted Risk Score: {adjusted_risk_score:.2f}%")
 
 # ✅ Generate PDF Report
 def generate_pdf_report(matched_entries, adjusted_risk_score):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", style='B', size=16)
-    pdf.cell(200, 10, "DugDugInfo - Breach Report", ln=True, align='C')
+    pdf.cell(200, 10, "Breach Report", ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, f"Adjusted Risk Score: {adjusted_risk_score:.2f}%", ln=True, align='C')
@@ -112,8 +106,8 @@ def generate_pdf_report(matched_entries, adjusted_risk_score):
     pdf.ln(10)
     pdf.set_font("Arial", size=10)
 
-    for i, (username, email, password, phone) in enumerate(matched_entries[:50]):  # Limit to first 50
-        pdf.cell(200, 10, f"{i+1}. {email} - {phone}", ln=True)
+    for i, (username, password, email, phone, card_number, expiry_date, cvv) in enumerate(matched_entries[:50]):
+        pdf.cell(200, 10, f"{i+1}. {email} - {phone} - Card: {card_number} - CVV: {cvv}", ln=True)
 
     pdf_file = "breach_report.pdf"
     pdf.output(pdf_file)
@@ -154,9 +148,11 @@ def send_email_alert(pdf_filename):
     except smtplib.SMTPException as e:
         logger.error(f"❌ Error Sending Email: {e}")
 
+# ✅ Send Email with Breach Report
 send_email_alert(pdf_file)
 
 # ✅ Close Database Connection
 cursor.close()
 conn.close()
 logger.info("✅ Database Connection Closed Successfully.")
+
