@@ -1,4 +1,3 @@
-
 import mysql.connector
 import joblib
 import pandas as pd
@@ -12,19 +11,20 @@ import logging
 from fpdf import FPDF
 import os
 
-# Setup logging
+# ✅ Setup Logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
 
 # ✅ Load AI Risk Model
 MODEL_PATH = "risk_model.pkl"
 if not os.path.exists(MODEL_PATH):
-    logger.error("❌ Error: risk_model.pkl not found. Train and save the model first!")
+    logger.error("❌ Error: risk_model.pkl not found! Train and save the model first.")
     exit()
+
 model = joblib.load(MODEL_PATH)
 logger.info("✅ AI Risk Model Loaded Successfully!")
 
-# ✅ Database Connection Configuration
+# ✅ Database Configuration
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
@@ -41,7 +41,7 @@ except mysql.connector.Error as e:
     logger.error(f"❌ Database Connection Error: {e}")
     exit()
 
-# ✅ Read CSV File
+# ✅ Load CSV File
 CSV_PATH = "export_data.csv"
 if not os.path.exists(CSV_PATH):
     logger.error("❌ Error: export_data.csv file not found!")
@@ -52,6 +52,7 @@ required_columns = ["Username", "Password", "email", "phone"]
 if not all(col in compare_data.columns for col in required_columns):
     logger.error("❌ CSV File Missing Required Columns!")
     exit()
+
 compare_data = compare_data[required_columns].map(str.strip)
 logger.info(f"✅ Loaded export_data.csv with {len(compare_data)} entries.")
 
@@ -66,7 +67,6 @@ except mysql.connector.Error as e:
 
 # ✅ Compare CSV Data with Database
 matched_entries = [tuple(map(str.strip, row)) for row in compare_data.itertuples(index=False, name=None) if tuple(map(str.strip, row)) in db_data]
-mismatched_entries = [tuple(map(str.strip, row)) for row in compare_data.itertuples(index=False, name=None) if tuple(map(str.strip, row)) not in db_data]
 
 if not matched_entries:
     logger.info("✅ No compromised accounts found! Exiting.")
@@ -86,10 +86,13 @@ features_df = pd.DataFrame(features, columns=["password_length"])
 # ✅ Predict Risk Scores
 try:
     risk_scores = model.predict(features_df)
-    mean_risk = np.mean(risk_scores) / 10
-    matched_ratio = len(matched_entries) / max(len(db_data), 1)
-    adjusted_risk_score = (mean_risk * np.log1p(matched_ratio ** 0.5)) * 100  
-    adjusted_risk_score = min(max(adjusted_risk_score, 0), 100)
+    mean_risk = np.mean(risk_scores) / 10  # Normalize risk score
+    matched_ratio = len(matched_entries) / max(len(db_data), 1)  # Prevent division by zero
+
+    # ✅ Adjusted Risk Score Calculation
+    adjusted_risk_score = (matched_ratio ** 0.9) * 100  
+    adjusted_risk_score = min(max(adjusted_risk_score, 0), 100)  # Keep in 0-100% range
+
     logger.info(f"🚨 Adjusted Risk Score: {adjusted_risk_score:.2f}%")
 except Exception as e:
     logger.error(f"❌ Error Predicting Risk Scores: {e}")
@@ -108,8 +111,10 @@ def generate_pdf_report(matched_entries, adjusted_risk_score):
     pdf.cell(200, 10, f"Total Compromised Accounts: {len(matched_entries)}", ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Arial", size=10)
-    for username, email, password, phone in matched_entries:
-        pdf.cell(200, 10, f"{email} - {phone}", ln=True)
+
+    for i, (username, email, password, phone) in enumerate(matched_entries[:50]):  # Limit to first 50
+        pdf.cell(200, 10, f"{i+1}. {email} - {phone}", ln=True)
+
     pdf_file = "breach_report.pdf"
     pdf.output(pdf_file)
     return pdf_file
@@ -122,13 +127,13 @@ def send_email_alert(pdf_filename):
     sender_email = "ay8010650@gmail.com"
     sender_password = "ovkk tjwe ojda hgxe"
     recipient_email = "ry8010650@gmail.com"
-    
+
     message = MIMEMultipart()
     message["From"] = sender_email
     message["To"] = recipient_email
     message["Subject"] = "🚨 ALERT: Breach Report Attached"
     message.attach(MIMEText("Please find the attached breach report.", "plain"))
-    
+
     try:
         with open(pdf_filename, "rb") as attachment:
             part = MIMEBase("application", "octet-stream")
@@ -139,7 +144,7 @@ def send_email_alert(pdf_filename):
     except Exception as e:
         logger.error(f"❌ Error Attaching PDF: {e}")
         return
-    
+
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
@@ -155,5 +160,3 @@ send_email_alert(pdf_file)
 cursor.close()
 conn.close()
 logger.info("✅ Database Connection Closed Successfully.")
-
-
