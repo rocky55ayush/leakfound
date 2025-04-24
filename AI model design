@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>AI Model Monitoring</title>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Model Monitoring</h1>
+        <h2>Tracking and preventing SQL Injection attacks in real-time</h2>
+        
+        <div class="query-section">
+            <h3>Malformed Queries</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Query</th>
+                        <th>Rows Sent</th>
+                        <th>Rows Affected</th>
+                        <th>Execution</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2025-04-25 13:12</td>
+                        <td><span class="suspicious">SELECT + FROM users WHERE username= admin' --</span></td>
+                        <td>5</td>
+                        <td>0</td>
+                        <td>0:02.s</td>
+                        <td><span class="status suspicious">Suspicious</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button id="download-log">Download Log File</button>
+            <button class="block-ip">Block IP</button>
+            <button class="mark-safe">Mark Safe</button>
+        </div>
+        
+        <div class="auto-block">
+            <label for="auto-block-toggle">Auto-block IPs </label>
+            <input type="checkbox" id="auto-block-toggle">
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
